@@ -24,7 +24,14 @@ def azkaban_authenticate():
 def execute_a_flow(project_name, flow_name, param_date, session_id):
 
     # see: http://docs.python-requests.org/zh_CN/latest/api.html#requests.Response
-    status, session_id = azkaban_authenticate()
+    # status, session_id = azkaban_authenticate()
+    print("call func: %s, params: [%s=%s], [%s=%s, [%s=%s], [%s=%s]" \
+    %("execute_a_flow", \
+    "project_name", project_name, \
+    "flow_name", flow_name, \
+    "param_date", param_date, \
+    "session_id", session_id))
+
     data = {}
     data["session.id"] = session_id
     data["ajax"] = "executeFlow"
@@ -88,25 +95,34 @@ def flush_flow(project, flow, start_date, end_date):
     # see https://stackoverflow.com/questions/466345/converting-string-into-datetime
     dt = begin
     delta = datetime.timedelta(days=1)
+    secs = 5
+    # resp_json = execute_a_flow(project, flow, begin, session_id)
+    execid = 0
+    running_date = begin.strftime("%Y-%m-%d")
+
     while dt <= end:
         dateStr = dt.strftime("%Y-%m-%d")
-        resp_json = execute_a_flow(project, flow, dateStr, session_id)
+
         execIds = get_running_flow(project, flow, session_id)
-        execid = resp_json.get("execid")
-        if execid > 0: print("Azkaban Project=%s, Flow=%s is running, date=%s, execid=%s!" %(project, flow, dateStr, execid))
-        if execid in execIds:
-            secs = 5
-            print("Flow %s is already running, time sleep %s seconds..." %(flow, secs))
-            time.sleep(secs)
+
+        ## 如果当前 flow 的 execid 在 running 的 execIds 中，则程序暂停 2 秒。
+        if (execIds is None) or execid not in execIds:
+            resp_json = execute_a_flow(project, flow, dateStr, session_id)
+            running_date = dateStr
+            execid = resp_json.get("execid")
+            print("flush_a_flow: %s, dateStr=%s, execid=%s" %(flow, running_date, execid))
+            dt += delta
         else:
-            print("Azkaban Project=%s, Flow=%s , date=%s, execid=%s finished!" %(project, flow, dateStr, execid))
-        dt += delta
+            print("Azkaban Project=%s, Flow=%s, date=%s, execid=%s is running! please wait for %s seconds..." %(project, flow, running_date, execid, secs))
+            time.sleep(secs)
 
 def usage():
     print("Usage: ")
     print("azkaban_apis.py -m <api_methond> -p <azkaban_project> -f <flow> --start_date <date,format:yyyy-MM-dd> --end_date <date,format:yyyy-MM-dd>")
     print("eg1: ")
-    print("python azkaban_apis.py -m fff -p flow_test -f flow_test --start_date 2018-12-15 --end_date 2018-12-15")
+    print("python azkaban_apis.py -m flush_flow -p flow_test -f flow_test --start_date 2018-12-15 --end_date 2018-12-15")
+    print("eg2: ")
+    print("python azkaban_apis.py -m flush_flow -p crm -f crm --start_date 2018-12-07 --end_date 2018-12-21")
 
 def main(argv):
     try:
